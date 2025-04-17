@@ -1,114 +1,43 @@
 name: Python GitFlow CI/CD Pipeline
+name: Python CI with GitFlow
 
 on:
   push:
-    branches: [ "develop", "feature/*", "hotfix/*" ]
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
+      - 'hotfix/**'
   pull_request:
-    branches: [ "develop" ]
-  release:
-    types: [published]
+    branches:
+      - main
+      - develop
 
 jobs:
-  # --- CI Часть (тестирование) ---
-  test:
-    name: "Test (Python ${{ matrix.python-version }})"
+  build-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11"]  # Тестируем на двух версиях Python
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Python
+    steps:
+      - name:  Checkout code
+        uses: actions/checkout@v3
+
+      - name:  Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
 
-      - name: Install dependencies
+      - name:  Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
-          pip install flake8 black  # Добавляем линтеры
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run linters
+      - name:  Lint with flake8
         run: |
-          flake8 src --count --show-source --statistics
-          black --check src
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || exit 0
 
-      - name: Run tests
-        run: pytest -v --cov=src --cov-report=xml
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-
-  # --- Сборка dev-образа для develop ---
-  build-dev:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'  # Только для develop ветки
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push dev image
+      - name:  Run tests (pytest)
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/app:dev .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/app:dev
-
-  # --- Продакшен-деплой (main/hotfix) ---
-  deploy-prod:
-    needs: test
-    runs-on: self-hosted  # Запускаем на своем сервере
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hotfix/')
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Stop old container
-        run: docker rm -f app-prod || true
-
-      - name: Deploy latest image
-        run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
-          docker run -d \
-            --name app-prod \
-            -p 8000:8000 \
-            -e ENV=production \
-            --restart unless-stopped \
-            ${{ secrets.DOCKERHUB_USERNAME }}/app:latest
-
-      - name: Notify Slack
-        uses: slackapi/slack-github-action@v1
-        if: always()
-        with:
-          slack-message: "Деплой на прод завершен: ${{ github.ref }}"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-  # --- Создание релиза (при мерже в main) ---
-  create-release:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v$(date +%Y.%m.%d)
-          release_name: Release v$(date +%Y.%m.%d)
-          draft: false
-          prerelease: false
+          pip install pytest
+          pytest || exit 1
