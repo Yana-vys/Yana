@@ -1,10 +1,10 @@
-# app.py
 from flask import Flask
+
 app = Flask(__name__)
+visit_count =0
 
 @app.route('/')
-def hello_world():
-    return 'Hello World!'
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80)
+def index():
+    global visit_count
+    visit_count += 1
+    return f"Всего посещений: {visit_count}"
