@@ -45,5 +45,5 @@ jobs:
 
       - name: Run Docker container
         run: |
-          docker run -d --name kursovaja  kursovaja:latest
+          docker run -d -p 80:4000 --name kursovaja  kursovaja:latest
           
