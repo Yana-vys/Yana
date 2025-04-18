@@ -14,7 +14,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: [self-hosted, yana, linux]
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
